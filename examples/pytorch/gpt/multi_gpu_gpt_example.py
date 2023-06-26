@@ -29,7 +29,7 @@ from examples.pytorch.gpt.utils import comm
 from examples.pytorch.gpt.utils import gpt_decoder
 from examples.pytorch.gpt.utils.parallel_gpt import ParallelGPT
 
-from utils import word_list
+from examples.pytorch.gpt.utils import word_list
 
 os.environ["MASTER_ADDR"]="localhost"
 os.environ["MASTER_PORT"]="8899"

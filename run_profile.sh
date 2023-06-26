@@ -35,12 +35,9 @@ run_t5(){
 }
 
 
-for config in 4; do
+for config in 0; do
         for dtype in fp32; do
                 for batch_size in 1 ; do
-# for config in 0 1; do
-#         for dtype in fp32 fp16; do
-#                 for batch_size in 1 8; do
 
                         if [[ $config == 0 ]]; then
                                 MODEL=gpt2_small
@@ -114,7 +111,7 @@ for config in 4; do
                         echo $PROF $CMD in $PWD
                         $PROF $CMD
 
-                        sleep 3s
+                        sleep 2s
 
                 done
         done
