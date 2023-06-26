@@ -31,6 +31,14 @@ from examples.pytorch.gpt.utils.parallel_gpt import ParallelGPT
 
 from utils import word_list
 
+os.environ["MASTER_ADDR"]="localhost"
+os.environ["MASTER_PORT"]="8899"
+os.environ["RANK"]="0"
+os.environ["LOCAL_RANK"]="0"
+os.environ["WORLD_SIZE"]="1"
+os.environ["CUDA_VISIBLE_DEVICES"]="2"
+torch.distributed.init_process_group(backend="nccl")
+
 @torch.no_grad()
 def main():
     parser = argparse.ArgumentParser()
@@ -241,7 +249,6 @@ def main():
 
     # Prepare model.
     if not args.use_gpt_decoder_ops:
-        print("LIBPATH:{}".format(args.lib_path))
         gpt = ParallelGPT(head_num, size_per_head, vocab_size, start_id, end_id,
                           layer_num, max_seq_len, tensor_para_size, pipeline_para_size,
                           lib_path=args.lib_path, inference_data_type=args.inference_data_type,
@@ -319,7 +326,15 @@ def main():
             return output_dict
 
     # Generate tokens.
+    for i in range(8):
+        gen_outputs = gpt_generate_fn()
+
+    # Profiler Code
+    torch.cuda.cudart().cudaProfilerStart()
+
     gen_outputs = gpt_generate_fn()
+
+    torch.cuda.cudart().cudaProfilerStop()
 
     if rank == 0:
         if not args.use_gpt_decoder_ops:

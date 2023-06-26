@@ -343,7 +343,12 @@ def translate(args_dict):
         while prev < len(src_text):
             input_texts = src_text[prev:prev+batch_size]
             prev += batch_size
-            input_token = tokenizer(input_texts, return_tensors='pt', padding=True)
+            input_token = tokenizer(input_texts,
+                                    return_tensors='pt',
+                                    padding=True,
+                                    truncation=True,
+                                    max_length=max_seq_len,
+                                    )
 
             # An example to prevent generating "Chef"
             # bad_words_text = np.array([["Chef"]]* len(input_texts), dtype=object)
@@ -376,6 +381,11 @@ def translate(args_dict):
                 tmp_beam_size = beam_size
                 if translation_result_list[i].name.find("sampling") != -1:
                     tmp_beam_size = 1
+
+                # Profiler Code
+                if prev == 30:
+                    torch.cuda.cudart().cudaProfilerStart()
+
                 ft_decoding_outputs, ft_decoding_seq_lens = ft_t5(input_token,
                                                                   None,
                                                                   tmp_beam_size,
@@ -390,6 +400,11 @@ def translate(args_dict):
                                                                   len_penalty=len_penalty,
                                                                   bad_words_list=bad_words_list,
                                                                   stop_words_list=stop_words_list,)
+
+                if prev == 30:
+                    torch.cuda.cudart().cudaProfilerStop()
+                    break
+
                 translation_result_list[i].batch_ids_list.append(ft_decoding_outputs)
                 translation_result_list[i].batch_seq_len_list.append(ft_decoding_seq_lens)
             
@@ -504,4 +519,6 @@ if __name__ == "__main__":
     args = parser.parse_args()
     log_format = "%(asctime)s %(name)s [%(levelname)s] %(message)s"
     logging.basicConfig(level=logging.DEBUG if args.verbose else logging.INFO, format=log_format)
-    translate(vars(args))
+
+    with torch.no_grad():
+        translate(vars(args))
