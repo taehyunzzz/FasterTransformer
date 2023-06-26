@@ -290,7 +290,7 @@ def translate(args_dict):
         )
 
         if args_dict["ckpt_path"] is not None:
-            ft_encoder_weight.load_from_bin(args_dict["ckpt_path"], model_type, load_data_type)
+            ft_encoder_weight.load_from_bin(args_dict["ckpt_path"], model_type)
             ft_decoding_weight.load_from_bin(args_dict["ckpt_path"], model_type, load_data_type)
         else:
             ft_encoder_weight.load_from_model(t5_model)

@@ -241,6 +241,7 @@ def main():
 
     # Prepare model.
     if not args.use_gpt_decoder_ops:
+        print("LIBPATH:{}".format(args.lib_path))
         gpt = ParallelGPT(head_num, size_per_head, vocab_size, start_id, end_id,
                           layer_num, max_seq_len, tensor_para_size, pipeline_para_size,
                           lib_path=args.lib_path, inference_data_type=args.inference_data_type,
