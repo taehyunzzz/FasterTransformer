@@ -35,7 +35,7 @@ run_t5(){
 }
 
 
-for config in 0; do
+for config in 2; do
         for dtype in fp32; do
                 for batch_size in 1 ; do
 
