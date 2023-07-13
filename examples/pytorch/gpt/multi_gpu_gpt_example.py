@@ -36,7 +36,7 @@ os.environ["MASTER_PORT"]="8899"
 os.environ["RANK"]="0"
 os.environ["LOCAL_RANK"]="0"
 os.environ["WORLD_SIZE"]="1"
-os.environ["CUDA_VISIBLE_DEVICES"]="2"
+os.environ["CUDA_VISIBLE_DEVICES"]="1"
 torch.distributed.init_process_group(backend="nccl")
 
 @torch.no_grad()

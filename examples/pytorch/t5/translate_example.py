@@ -126,7 +126,9 @@ def translate(args_dict):
     ## read checkpoint config if exists
     ckpt_config = configparser.ConfigParser()
     activation_type = "relu"
-    if (model_type in ["Megatron", "Megatron-DeepSpeed"]):
+
+    # if (model_type in ["Megatron", "Megatron-DeepSpeed"]):
+    if 1:
         ckpt_config_path = os.path.join(ckpt_path, 'config.ini')
         if os.path.isfile(ckpt_config_path):
             ckpt_config.read(ckpt_config_path)
@@ -142,7 +144,7 @@ def translate(args_dict):
             if (ckpt_config.get('structure', 'moe_layers_in_encoder') != '[]'):
                 moe_layers_in_encoder = [int(n) for n in ckpt_config.get('structure', 'moe_layers_in_encoder')[1:-1].replace(" ", "").split(',')]
             if (ckpt_config.get('structure', 'moe_layers_in_decoder') != '[]'):
-                moe_layers_in_decoder = [int(n) for n in ckpt_config.get('structure', 'moe_layers_in_encoder')[1:-1].replace(" ", "").split(',')]
+                moe_layers_in_decoder = [int(n) for n in ckpt_config.get('structure', 'moe_layers_in_decoder')[1:-1].replace(" ", "").split(',')]
         else:
             raise Exception("config file does exist with the ckpt !")
 
@@ -187,16 +189,19 @@ def translate(args_dict):
     decoder_config.update({"num_experts": 0})
     encoder_config.update({"moe_layer_index": []})
     decoder_config.update({"moe_layer_index": []})
+
     if model_type != "Megatron":
         activation_type = encoder_config.feed_forward_proj
         if activation_type == "gated-gelu" or activation_type == "gated-relu":
             use_gated_activation = True
     # https://github.com/huggingface/transformers/blob/main/src/transformers/models/t5/modeling_t5.py#L1660
     # if tie_word_embeddings == True, scale the decoder output by sequence_output = sequence_output * (self.model_dim**-0.5)
+
     tie_word_embeddings = decoder_config.tie_word_embeddings
 
     q_scaling = 1.0 / (math.sqrt(encoder_config.d_kv))
-    if model_type in ["Megatron", "Megatron-DeepSpeed"]:
+    # if model_type in ["Megatron", "Megatron-DeepSpeed"]:
+    if 1:
         ## update configs when using Megatron model structure
         q_scaling = 1.0
 
@@ -209,7 +214,8 @@ def translate(args_dict):
         encoder_config.d_ff = ckpt_config.getint('encoder', 'd_ff')
         encoder_config.num_layers = ckpt_config.getint('encoder', 'num_layers')
         encoder_config.relative_attention_num_buckets = ckpt_config.getint('encoder', 'relative_attention_num_buckets_or_max_pos_seq_len')
-        if model_type == "Megatron-DeepSpeed":
+        # if model_type == "Megatron-DeepSpeed":
+        if 1:
             encoder_config.num_experts = ckpt_config.getint('encoder', 'num_experts')
             encoder_config.moe_layer_index = moe_layers_in_encoder
 
@@ -220,9 +226,11 @@ def translate(args_dict):
         decoder_config.d_ff = ckpt_config.getint('decoder', 'd_ff')
         decoder_config.num_layers = ckpt_config.getint('decoder', 'num_layers')
         decoder_config.relative_attention_num_buckets = ckpt_config.getint('decoder', 'relative_attention_num_buckets_or_max_pos_seq_len')
-        if model_type == "Megatron-DeepSpeed":
+        # if model_type == "Megatron-DeepSpeed":
+        if 1:
             decoder_config.num_experts = ckpt_config.getint('decoder', 'num_experts')
             decoder_config.moe_layer_index = moe_layers_in_decoder
+
         decoder_config.decoder_start_token_id = ckpt_config.getint('decoder', 'decoder_start_token_id')
         decoder_config.eos_token_id = ckpt_config.getint('decoder', 'eos_token_id')
 
@@ -235,8 +243,9 @@ def translate(args_dict):
         os.system(cmd)
     translation_result_list = []
 
-    if (t5_with_moe == 1) and (time_args.find('0') != -1 or time_args.find('2') != -1):
-        raise Exception("HF models doesn't support MoE inference")
+    # if (t5_with_moe == 1) and (time_args.find('0') != -1 or time_args.find('2') != -1):
+    #     raise Exception("HF models doesn't support MoE inference")
+
     if time_args.find("0") != -1:
         translation_result_list.append(TranslationResult("hf-beamsearch-warmup", "HF"))
         translation_result_list.append(TranslationResult("hf-beamsearch", "HF"))
@@ -290,8 +299,9 @@ def translate(args_dict):
         )
 
         if args_dict["ckpt_path"] is not None:
-            ft_encoder_weight.load_from_bin(args_dict["ckpt_path"], model_type)
-            ft_decoding_weight.load_from_bin(args_dict["ckpt_path"], model_type, load_data_type)
+            ft_encoder_weight.load_from_bin(args_dict["ckpt_path"], model_type, encoder_config)
+            # ft_decoding_weight.load_from_bin(args_dict["ckpt_path"], model_type, load_data_type)
+            ft_decoding_weight.load_from_bin(args_dict["ckpt_path"], model_type, decoder_config)
         else:
             ft_encoder_weight.load_from_model(t5_model)
             ft_decoding_weight.load_from_model(t5_model)
@@ -312,7 +322,7 @@ def translate(args_dict):
                                 encoder_config.d_model, remove_padding, encoder_config.num_layers,
                                 encoder_config.relative_attention_num_buckets, encoder_config.num_experts, encoder_config.moe_layer_index,
                                 128, False, q_scaling, tensor_para_size, pipeline_para_size, t5_with_bias,
-                                position_embedding_type, moe_k=0,
+                                position_embedding_type, moe_k=1,
                                 activation_type=activation_type,)
         ft_decoding = FTT5Decoding(ft_decoding_weight.w, lib_path,
                                 decoder_config.num_heads, decoder_config.d_kv,
@@ -324,10 +334,13 @@ def translate(args_dict):
                                 decoder_config.relative_attention_num_buckets, decoder_config.num_experts, decoder_config.moe_layer_index, max_distance=128,
                                 tensor_para_size=tensor_para_size, pipeline_para_size=pipeline_para_size,
                                 t5_with_bias=t5_with_bias,
-                                position_embedding_type=position_embedding_type, moe_k=0,
+                                position_embedding_type=position_embedding_type, moe_k=1,
                                 activation_type=activation_type, tie_word_embeddings=tie_word_embeddings,)
 
         ft_t5 = FTT5(ft_encoder, ft_decoding)
+
+        print("\nCKPT1: MODEL CONFIG COMPLETE\n")
+
 
     with open(source_file, 'r') as f:
         src_text = recover_bpe(f.readlines())

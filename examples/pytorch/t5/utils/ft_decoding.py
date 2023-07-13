@@ -165,15 +165,23 @@ class FTT5DecodingWeight(object):
         for i in range(23):
             self.w.append(torch.empty((1,1), dtype=torch_weight_dtype).contiguous().cuda())
 
-    def load_from_bin(self, ckpt_path, model_type):
+    def load_from_bin(self, ckpt_path, model_type, config=None):
         start_layer = self.pipeline_para_rank * self.num_layer //  self.pipeline_para_size
         end_layer = (self.pipeline_para_rank + 1) * self.num_layer //  self.pipeline_para_size
 
         np_weight_dtype = self.weight_data_type
         torch_weight_dtype = {np.float32: torch.float32, np.float16: torch.float16}[np_weight_dtype]
         
+        if config != None:
+            d_model=config.d_model
+            num_experts=config.num_experts
+        else :
+            d_model=768
+            num_experts=8
+
         # load by binary files
-        if model_type == "Megatron":
+        # if model_type == "Megatron":
+        if 1:
             t = torch.stack([torch.from_numpy(np.fromfile(f"{ckpt_path}/decoder.block.{i}.layer.0.layer_norm.weight.bin", dtype=np_weight_dtype)) for i in range(start_layer, end_layer)], 0).contiguous().cuda()
             self.w.append(t)
             t = torch.stack([torch.from_numpy(np.fromfile(f"{ckpt_path}/decoder.block.{i}.layer.0.SelfAttention.qkv.weight.{self.tensor_para_rank}.bin", dtype=np_weight_dtype)) for i in range(start_layer, end_layer)], 0).contiguous().cuda()
@@ -192,15 +200,51 @@ class FTT5DecodingWeight(object):
             self.w.append(t)
             t = torch.stack([torch.from_numpy(np.fromfile(f"{ckpt_path}/decoder.block.{i}.layer.2.layer_norm.weight.bin", dtype=np_weight_dtype)) for i in range(start_layer, end_layer)], 0).contiguous().cuda()
             self.w.append(t)
-            t = torch.stack([torch.from_numpy(np.fromfile(f"{ckpt_path}/decoder.block.{i}.layer.2.DenseReluDense.wi.weight.{self.tensor_para_rank}.bin", dtype=np_weight_dtype)) for i in range(start_layer, end_layer)], 0).contiguous().cuda()
-            self.w.append(t)
+
+
+            # t = torch.stack([torch.from_numpy(np.fromfile(f"{ckpt_path}/decoder.block.{i}.layer.2.DenseReluDense.wi.weight.{self.tensor_para_rank}.bin", dtype=np_weight_dtype)) for i in range(start_layer, end_layer)], 0).contiguous().cuda()
+            # self.w.append(t)
+            # =========== process normal and moe dense layer =================
+            t_list = []
+            for i in range(start_layer, end_layer):
+
+                # placeholder for moe weights
+                if i in config.moe_layer_index:
+                    t = torch.stack([torch.from_numpy(np.fromfile(f"{ckpt_path}/decoder.block.{i}.layer.2.DenseReluDense.wi.weight.{self.tensor_para_rank}.bin", dtype=np_weight_dtype)) for i in range(num_experts)], 0).reshape(-1).contiguous().cuda()
+                    t_list.append(t)
+                else :
+                    t =torch.from_numpy(np.fromfile(f"{ckpt_path}/decoder.block.{i}.layer.2.DenseReluDense.wi.weight.{self.tensor_para_rank}.bin", dtype=np_weight_dtype)).contiguous().cuda()
+                    t_list.append(t)
+
+            self.w.append(torch.cat(t_list, 0).contiguous().cuda())
+            # ================================================================
+
+
             if self.use_gated_activation:
                 t = torch.stack([torch.from_numpy(np.fromfile(f"{ckpt_path}/decoder.block.{i}.layer.2.DenseReluDense.wi2.weight.{self.tensor_para_rank}.bin", dtype=np_weight_dtype)) for i in range(start_layer, end_layer)], 0).contiguous().cuda()
                 self.w.append(t)
             else:
                 self.w.append(torch.empty((1,1), dtype=torch_weight_dtype).contiguous().cuda())
-            t = torch.stack([torch.from_numpy(np.fromfile(f"{ckpt_path}/decoder.block.{i}.layer.2.DenseReluDense.wo.weight.{self.tensor_para_rank}.bin", dtype=np_weight_dtype)) for i in range(start_layer, end_layer)], 0).contiguous().cuda()
-            self.w.append(t)
+
+            # t = torch.stack([torch.from_numpy(np.fromfile(f"{ckpt_path}/decoder.block.{i}.layer.2.DenseReluDense.wo.weight.{self.tensor_para_rank}.bin", dtype=np_weight_dtype)) for i in range(start_layer, end_layer)], 0).contiguous().cuda()
+            # self.w.append(t)
+
+            # =========== process normal and moe dense layer =================
+            t_list = []
+            for i in range(start_layer, end_layer):
+
+                # placeholder for moe weights
+                if i in config.moe_layer_index:
+                    t = torch.stack([torch.from_numpy(np.fromfile(f"{ckpt_path}/decoder.block.{i}.layer.2.DenseReluDense.wo.weight.{self.tensor_para_rank}.bin", dtype=np_weight_dtype)) for i in range(num_experts)], 0).reshape(-1).contiguous().cuda()
+                    t_list.append(t)
+                else :
+                    t = torch.from_numpy(np.fromfile(f"{ckpt_path}/decoder.block.{i}.layer.2.DenseReluDense.wo.weight.{self.tensor_para_rank}.bin", dtype=np_weight_dtype)).contiguous().cuda()
+                    t_list.append(t)
+
+            self.w.append(torch.cat(t_list, 0).contiguous().cuda())
+            # ================================================================
+
+
             t = torch.from_numpy(np.fromfile(f"{ckpt_path}/decoder.final_layer_norm.weight.bin", dtype=np_weight_dtype)).contiguous().cuda()
             self.w.append(t)
             t = torch.from_numpy(np.fromfile(f"{ckpt_path}/shared.weight_T.bin", dtype=np_weight_dtype).reshape([self.config.d_model, self.config.vocab_size])).contiguous().cuda()
@@ -235,19 +279,52 @@ class FTT5DecodingWeight(object):
                 self.w.append(t)
                 t = torch.stack([torch.from_numpy(np.fromfile(f"{ckpt_path}/decoder.block.{i}.layer.2.layer_norm.bias.bin", dtype=np_weight_dtype)) for i in range(start_layer, end_layer)], 0).contiguous().cuda()
                 self.w.append(t)
-                t = torch.stack([torch.from_numpy(np.fromfile(f"{ckpt_path}/decoder.block.{i}.layer.2.DenseReluDense.wi.bias.{self.tensor_para_rank}.bin", dtype=np_weight_dtype)) for i in range(start_layer, end_layer)], 0).contiguous().cuda()
-                self.w.append(t)
+                # t = torch.stack([torch.from_numpy(np.fromfile(f"{ckpt_path}/decoder.block.{i}.layer.2.DenseReluDense.wi.bias.{self.tensor_para_rank}.bin", dtype=np_weight_dtype)) for i in range(start_layer, end_layer)], 0).contiguous().cuda()
+                # self.w.append(t)
+
+                # =========== process normal and moe dense layer =================
+                t_list = []
+                for i in range(start_layer, end_layer):
+                    # placeholder for moe weights
+                    if i in config.moe_layer_index:
+                        t = torch.stack([torch.from_numpy(np.fromfile(f"{ckpt_path}/decoder.block.{i}.layer.2.DenseReluDense.wi.bias.{self.tensor_para_rank}.bin", dtype=np_weight_dtype)) for i in range(num_experts)], 0).reshape(-1).contiguous().cuda()
+                        t_list.append(t)
+                    else :
+                        t = torch.from_numpy(np.fromfile(f"{ckpt_path}/decoder.block.{i}.layer.2.DenseReluDense.wi.bias.{self.tensor_para_rank}.bin", dtype=np_weight_dtype)).contiguous().cuda()
+                        t_list.append(t)
+
+                self.w.append(torch.cat(t_list, 0).contiguous().cuda())
+                # ================================================================
+
+                # We don't have use_gated_activation in Megatron-DeepSpeed currently, so here weight placeholder is always empty
                 if self.use_gated_activation:
-                    t = torch.stack([torch.from_numpy(np.fromfile(f"{ckpt_path}/decoder.block.{i}.layer.2.DenseReluDense.wi2.bias.{self.tensor_para_rank}.bin", dtype=np_weight_dtype)) for i in range(start_layer, end_layer)], 0).contiguous().cuda()
+                    t = torch.stack([torch.from_numpy(np.fromfile(f"{ckpt_path}/decoder.block.{i}.layer.2.DenseReluDense.wi2.bias.{self.tensor_para_rank}.bin", dtype=np_weight_dtype)) for i in range(start_layer, end_layer)], 0).reshape(-1).contiguous().cuda()
                     self.w.append(t)
                 else:
                     self.w.append(torch.empty((1,1), dtype=torch_weight_dtype).contiguous().cuda())
-                t = torch.stack([torch.from_numpy(np.fromfile(f"{ckpt_path}/decoder.block.{i}.layer.2.DenseReluDense.wo.bias.bin", dtype=np_weight_dtype)) for i in range(start_layer, end_layer)], 0).contiguous().cuda()
-                self.w.append(t)
+                # t = torch.stack([torch.from_numpy(np.fromfile(f"{ckpt_path}/decoder.block.{i}.layer.2.DenseReluDense.wo.bias.bin", dtype=np_weight_dtype)) for i in range(start_layer, end_layer)], 0).contiguous().cuda()
+                # self.w.append(t)
+
+                # =========== process normal and moe dense layer =================
+                t_list = []
+                for i in range(start_layer, end_layer):
+
+                    # placeholder for moe weights
+                    if i in config.moe_layer_index:
+                        t = torch.stack([torch.from_numpy(np.fromfile(f"{ckpt_path}/decoder.block.{i}.layer.2.DenseReluDense.wo.bias.bin", dtype=np_weight_dtype)) for i in range(num_experts)], 0).reshape(-1).contiguous().cuda()
+                        t_list.append(t)
+                    else :
+                        t = torch.from_numpy(np.fromfile(f"{ckpt_path}/decoder.block.{i}.layer.2.DenseReluDense.wo.bias.bin", dtype=np_weight_dtype)).contiguous().cuda()
+                        t_list.append(t)
+                
+                self.w.append(torch.cat(t_list, 0).contiguous().cuda())
+                # ================================================================
+
                 t = torch.from_numpy(np.fromfile(f"{ckpt_path}/decoder.final_layer_norm.bias.bin", dtype=np_weight_dtype)).contiguous().cuda()
                 self.w.append(t)
                 t = torch.from_numpy(np.fromfile(f"{ckpt_path}/shared.bias.bin", dtype=np_weight_dtype)).contiguous().cuda()
                 self.w.append(t)
+
             else:
                 #TODO: pass None Type to Torch Op
                 for i in range(14):
