@@ -322,7 +322,7 @@ def translate(args_dict):
                                 encoder_config.d_model, remove_padding, encoder_config.num_layers,
                                 encoder_config.relative_attention_num_buckets, encoder_config.num_experts, encoder_config.moe_layer_index,
                                 128, False, q_scaling, tensor_para_size, pipeline_para_size, t5_with_bias,
-                                position_embedding_type, moe_k=1,
+                                position_embedding_type, moe_k=1 if t5_with_moe else 0,
                                 activation_type=activation_type,)
         ft_decoding = FTT5Decoding(ft_decoding_weight.w, lib_path,
                                 decoder_config.num_heads, decoder_config.d_kv,
@@ -334,7 +334,7 @@ def translate(args_dict):
                                 decoder_config.relative_attention_num_buckets, decoder_config.num_experts, decoder_config.moe_layer_index, max_distance=128,
                                 tensor_para_size=tensor_para_size, pipeline_para_size=pipeline_para_size,
                                 t5_with_bias=t5_with_bias,
-                                position_embedding_type=position_embedding_type, moe_k=1,
+                                position_embedding_type=position_embedding_type, moe_k=1 if t5_with_moe else 0,
                                 activation_type=activation_type, tie_word_embeddings=tie_word_embeddings,)
 
         ft_t5 = FTT5(ft_encoder, ft_decoding)
@@ -350,6 +350,7 @@ def translate(args_dict):
         tgt_text = recover_bpe(f.readlines())
 
     for i in range(len(translation_result_list)):
+
         sys.stdout.flush()
         prev = 0
         start_time = datetime.now()
@@ -396,7 +397,7 @@ def translate(args_dict):
                     tmp_beam_size = 1
 
                 # Profiler Code
-                if prev == 30:
+                if prev == 0:
                     torch.cuda.cudart().cudaProfilerStart()
 
                 ft_decoding_outputs, ft_decoding_seq_lens = ft_t5(input_token,
@@ -416,7 +417,6 @@ def translate(args_dict):
 
                 if prev == 30:
                     torch.cuda.cudart().cudaProfilerStop()
-                    break
 
                 translation_result_list[i].batch_ids_list.append(ft_decoding_outputs)
                 translation_result_list[i].batch_seq_len_list.append(ft_decoding_seq_lens)
@@ -448,6 +448,9 @@ def translate(args_dict):
             with open(translation_result_list[i].name + ".txt", 'w') as f:
                 for line in translation_result_list[i].token_list:
                     f.write(line)
+    
+        if i == 30:
+            break
     
     if rank == 0:
         for t in translation_result_list:

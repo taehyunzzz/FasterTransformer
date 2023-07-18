@@ -469,8 +469,12 @@ class FTT5DecodingWeight(object):
             if self.t5_with_moe:
                 gate_list = []
                 for i in range(start_layer, end_layer):
-                    if (os.path.isfile(f"{ckpt_path}/decoder.layers.{i}.mlp.deepspeed_moe.gate.wg.weight.bin")):
-                        gate_list.append(torch.from_numpy(np.fromfile(f"{ckpt_path}/decoder.layers.{i}.mlp.deepspeed_moe.gate.wg.weight.bin", dtype=np_weight_dtype)))
+                    # if (os.path.isfile(f"{ckpt_path}/decoder.layers.{i}.mlp.deepspeed_moe.gate.wg.weight.bin")):
+                    #     gate_list.append(torch.from_numpy(np.fromfile(f"{ckpt_path}/decoder.layers.{i}.mlp.deepspeed_moe.gate.wg.weight.bin", dtype=np_weight_dtype)))
+
+                    if i in config.moe_layer_index:
+                        t = torch.empty(d_model, num_experts).contiguous().cuda()
+
                 self.w.append(torch.stack(gate_list, 0).contiguous().cuda())
             else:
                 self.w.append(torch.empty((1,1), dtype=torch_weight_dtype).contiguous().cuda())
@@ -611,3 +615,4 @@ class FTT5(nn.Module):
             return ft_decoding_outputs.cpu().numpy(), ft_decoding_seq_lens.cpu().numpy(), ft_cross_attentions.cpu().numpy()
 
         return ft_decoding_outputs.cpu().numpy(), ft_decoding_seq_lens.cpu().numpy()
+        # return 0, 0

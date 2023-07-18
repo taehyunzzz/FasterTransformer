@@ -83,7 +83,8 @@ def initialize_model_parallel(tensor_para_size: int,
         f'parallel group has been already initialized.'
 
     print('Initializing tensor and pipeline parallel...')
-    dist.init_process_group(backend=backend)
+    dist.init_process_group(world_size=tensor_para_size*pipeline_para_size,
+                            backend=backend)
 
     global _model_para_group
     _model_para_group = ModelParallelGroup(tensor_para_size, pipeline_para_size)

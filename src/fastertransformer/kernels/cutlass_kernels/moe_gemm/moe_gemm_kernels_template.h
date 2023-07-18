@@ -23,6 +23,8 @@
 
 #include "cutlass/gemm/device/gemm_grouped.h"
 #include "cutlass/gemm/kernel/default_gemm_grouped.h"
+#include "src/fastertransformer/utils/nvtx_utils.h"
+#include <string.h>
 
 #include "cutlass_extensions/compute_occupancy.h"
 #include "cutlass_extensions/epilogue_helpers.h"
@@ -184,6 +186,8 @@ void generic_moe_gemm_kernelLauncher(const T*          A,
     }
 
     auto init_status = gemm.initialize(args);
+
+    // std::cout << args << std::endl;
     if (init_status != cutlass::Status::kSuccess) {
         std::string err_msg = "Failed to initialize cutlass variable batched gemm. Error: "
                               + std::string(cutlassGetStatusString(init_status));
@@ -348,6 +352,10 @@ void dispatch_gemm_config(const T*          A,
 {
 
     FT_LOG_DEBUG(__PRETTY_FUNCTION__);
+
+    std::string gemm_stage_str = "GEMM STAGE "+std::to_string(gemm_config.stages);
+    PUSH_RANGE(gemm_stage_str);
+
     switch (gemm_config.stages) {
         case 2:
             using DispatcherStages2 = dispatch_stages<T, WeightType, arch, EpilogueTag, ThreadblockShape, WarpShape, 2>;
@@ -402,6 +410,8 @@ void dispatch_gemm_config(const T*          A,
             throw std::runtime_error("[FT Error][MoE][dispatch_gemm_config] " + err_msg);
             break;
     }
+    POP_RANGE;
+
 }
 
 // This overload will handle tensorop gemms. It is disabled via SFINAE for fp32.

@@ -18,6 +18,7 @@
 #include <cuda_fp16.h>
 #include <math.h>
 #include <sstream>
+#include "src/fastertransformer/utils/nvtx_utils.h"
 
 // Ignore CUTLASS warnings about type punning
 #pragma GCC diagnostic push
@@ -667,6 +668,9 @@ void CutlassMoeFCRunner<T, WeightType, Enable>::run_moe_fc(const T*          inp
     }
 
     configure_ws_ptrs(workspace_ptr, num_rows, hidden_size, inter_size, num_experts, k);
+
+    PUSH_RANGE("PROF_TOPK_GATING");
+
     topk_gating_softmax_kernelLauncher<T>(gating_output,
                                           finished,
                                           expert_scales,
@@ -678,10 +682,16 @@ void CutlassMoeFCRunner<T, WeightType, Enable>::run_moe_fc(const T*          inp
                                           k,
                                           stream);
 
+    // ~ TOPK GATING POP
+    POP_RANGE;
+
 #ifndef NDEBUG
     cudaDeviceSynchronize();
     check_cuda_error(cudaGetLastError());
 #endif
+
+
+    PUSH_RANGE("PROF_REORDER_PERMUTE");
 
     const int sorter_ws_size_bytes = pad_to_multiple_of_16(sorter_.getWorkspaceSize(k * num_rows));
     sorter_.run((void*)fc1_result_,
@@ -717,10 +727,15 @@ void CutlassMoeFCRunner<T, WeightType, Enable>::run_moe_fc(const T*          inp
     compute_total_rows_before_expert(
         permuted_experts_, expanded_active_expert_rows, num_experts, total_rows_before_expert_, stream);
 
+    // ~ REORDER AND PERMUTE
+    POP_RANGE;
+
 #ifndef NDEBUG
     cudaDeviceSynchronize();
     check_cuda_error(cudaGetLastError());
 #endif
+
+    PUSH_RANGE("PROF_MOEFFN");
 
     moe_gemm_runner_.moe_gemm_bias_act(permuted_data_,
                                        fc1_expert_weights,
@@ -750,6 +765,9 @@ void CutlassMoeFCRunner<T, WeightType, Enable>::run_moe_fc(const T*          inp
                               inter_size,
                               num_experts,
                               stream);
+
+    // ~ MOEFFN
+    POP_RANGE;
 
 #ifndef NDEBUG
     cudaDeviceSynchronize();

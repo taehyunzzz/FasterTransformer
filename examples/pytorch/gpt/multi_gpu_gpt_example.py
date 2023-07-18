@@ -20,6 +20,7 @@ import sys
 import timeit
 
 import torch
+import torch.distributed as dist
 from torch.nn.utils.rnn import pad_sequence
 
 dir_path = os.path.dirname(os.path.realpath(__file__))
@@ -31,13 +32,14 @@ from examples.pytorch.gpt.utils.parallel_gpt import ParallelGPT
 
 from examples.pytorch.gpt.utils import word_list
 
+
 os.environ["MASTER_ADDR"]="localhost"
 os.environ["MASTER_PORT"]="8899"
 os.environ["RANK"]="0"
 os.environ["LOCAL_RANK"]="0"
 os.environ["WORLD_SIZE"]="1"
-os.environ["CUDA_VISIBLE_DEVICES"]="1"
-torch.distributed.init_process_group(backend="nccl")
+os.environ["CUDA_VISIBLE_DEVICES"]="0"
+dist.init_process_group(backend="nccl")
 
 @torch.no_grad()
 def main():
